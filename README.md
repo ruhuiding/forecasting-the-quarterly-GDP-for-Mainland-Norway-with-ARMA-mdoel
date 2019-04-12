@@ -1,0 +1,1 @@
+# forecasting-the-quarterly-GDP-for-Mainland-Norway-with-ARMA-mdoel
