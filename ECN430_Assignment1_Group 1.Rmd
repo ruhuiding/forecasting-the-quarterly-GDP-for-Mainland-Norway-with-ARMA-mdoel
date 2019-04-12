@@ -1,0 +1,323 @@
+---
+title: "ECN430 Assignment1"
+author: "group 1"
+date: 
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, eval=TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+rm(list = ls())
+#install.packages("ggplot2")
+#install.packages("zoo")
+#install.packages("fpp2")
+#install.packages("fUnitRoots")
+#install.packages("vars")
+library(dplyr)
+library(ggplot2)
+library(zoo)
+library(tseries)
+library(fpp2)
+library(urca)
+library(fUnitRoots)
+library(vars)
+library(forecast)
+library(mFilter)
+```
+
+
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+# seasonally adjusted data
+data <- read.csv("knr-tab-12-en.csv", header = F, sep = ";")
+# select the useful data
+gdp <- data[6,-(1:4)] %>% t() %>% na.omit(as.data.frame()) %>% as.numeric()
+gdp <- ts(gdp, start = 1978, frequency = 4)
+
+```
+
+
+## a) Plot the following series and describe them
+
+### GDP series
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+# plot GDP series
+autoplot(gdp/1000) + xlab("Time") + ylab("GDP:NOK billion") + 
+  ggtitle("GDP series")
+
+```
+
+### The log transformed GDP series
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+# log transformed GDP
+lgdp <- ts(log(gdp), start = 1978, frequency = 4)
+
+# plot log transformed GDP
+autoplot(lgdp) + xlab("Time") + ylab("") + 
+  ggtitle("Log transfromed GDP")
+
+```
+
+### The first difference of the log-series
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+# first difference of the log-series
+fdlog <- diff(lgdp, difference = 1)
+
+# plot first difference of the log-series
+autoplot(fdlog) + xlab("Time") + ylab("") + 
+  ggtitle("First difference of the log-series")
+ggsubseriesplot(fdlog) + xlab("Time") + ylab("First difference of the log-series")+ 
+  ggtitle("Test of quarterly effect") 
+```
+
+### The YoY series
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+# YoY growth rate
+yoy <- diff(lgdp, lag = 4, differences = 1)
+
+# plot the YoY (year-on-year %-age growth)
+autoplot(yoy) + xlab("Time") + ylab("") + 
+  ggtitle("YoY growth rate")
+ggsubseriesplot(yoy) + ggtitle("Test of quarterly effect (YOY)") 
+
+```
+
+## b) Use a correlogram to test the stationary
+
+### log-transformed GDP series
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+ggAcf(lgdp, lag.max = 50)
+ggPacf(lgdp)
+
+```
+
+### The first differenced log-transformed GDP series
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+ggAcf(fdlog)
+ggPacf(fdlog)
+
+```
+
+### YoY series
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+ggAcf(yoy)
+ggPacf(yoy)
+
+```
+
+## c) What about seasonal effects, do you have to take them away?
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+# unadjusted data
+data2 <- read.csv("knr-tab-09-en.csv", header = F, sep = ";")
+# select the useful data
+ugdp <- data2[6,-(1:4)] %>% t() %>% na.omit(as.data.frame()) %>% as.numeric()
+ugdp <- ts(ugdp, start = 1978, frequency = 4)
+
+# compare seasonally adjusted and unadjusted data provided by SSB
+autoplot(ugdp/1000, series = "unadjusted GDP series") + 
+  autolayer(gdp/1000, series = "seasonally adjusted GDP series") + 
+  xlab("Quarters") + ylab("billion NOK") + 
+  ggtitle("Compare seasonally adjusted and unadjusted data provided by SSB")+ 
+  theme(legend.position="bottom", legend.box = "vertical") 
+
+# regress the unadjusted log GDP series on quarterly dummies and a trend variable
+lugdp <- ts(log(ugdp), start = 1978, frequency = 4)
+summary(tslm(lugdp ~ trend + season))
+# save the residuals as a variable
+reslugdp <- residuals(tslm(lugdp ~ trend + season))
+# regress the seasonally adjusted GDP series on a trend variable
+summary(tslm(lgdp ~ trend))
+# save the residuals as a variable
+reslgdp <- residuals(tslm(lgdp ~ trend))
+
+# compare the residuals
+
+autoplot(reslugdp, series = "Residuals of regressing
+unadjusted log GDP 
+from SSB on quarterly dummies 
+and a trend variable") + 
+  autolayer(reslgdp, series = "Residuals of regressing
+seasonally adjusted log GDP 
+from SSB on a trend variable") + 
+  xlab("Quarters") + ylab("") + 
+  ggtitle("Compare the residuals")+
+  theme(legend.position = "bottom")
+
+cor.test(reslugdp, reslgdp)
+
+```
+
+
+## d) Test whether the three series under question b) are stationary.
+
+### Log transformed GDP series
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+summary(ur.df(lgdp,type="trend", selectlags = "AIC"))
+```
+
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+summary(ur.kpss(lgdp,lags="long"))
+```
+
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+summary(ur.ers(lgdp, model = "trend"))
+```
+
+### The first differenced log-transformed GDP series
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+summary(ur.df(fdlog,type="trend",selectlags = "AIC"))
+```
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+summary(ur.kpss(fdlog,lags="long" ))
+```
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+summary(ur.ers(fdlog, model = "trend"))
+```
+
+### YoY series
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+summary(ur.df(yoy,type="trend",selectlags = "AIC"))
+```
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+summary(ur.kpss(yoy,lags="long"))
+```
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+summary(ur.ers(yoy, model = "trend"))
+```
+
+## e) Explain what a partial autocorrelation function tells.
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+ggtsdisplay(yoy)
+```
+
+
+## f) Based on the information about the correlogram we try to fit an ARMA/ARIMA model.
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+Arima(yoy, order = c(2,0,1))
+Arima(yoy, order = c(2,0,2))
+Arima(yoy, order = c(2,0,3))
+Arima(yoy, order = c(2,0,4))
+
+```
+
+## g) 
+### Test the residual from your preferred model and comment.
+
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+fit23 <- Arima(yoy, order = c(2,0,3))
+checkresiduals(fit23)
+coefficients(fit23)
+
+fit24 <- Arima(yoy, order = c(2,0,4))
+checkresiduals(fit24)
+coefficients(fit24)
+
+```
+
+### Show the characteristic equation, and the characteristic roots from your preferred model.
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+coefficients(fit24)
+cf <- c(0.5619339, 0.2711374, 1, 0)
+cfmx <- matrix(data = cf, nrow = 2, byrow = T)
+eigen(cfmx)
+autoplot(fit24) + ggtitle("Inverse roots of characteristic polynomial")
+
+```
+
+## h) Compare the ARMA(2,2) model of yoy series to the one you preferred above. Briefly interpret your coefficients.
+
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+Arima(yoy, order = c(2,0,4))
+Arima(yoy, order = c(2,0,2))
+```
+
+## i) 
+### Reestimate the ARMA(2,2) model and your preferred model until T=2007Q4.
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+#autoplot(forecast(fit))
+yoy2 <- window(yoy, start=1978, end=c(2007,4))
+Arima(yoy2, order = c(2,0,4))
+Arima(yoy2, order = c(2,0,2))
+```
+
+###  Use the remaining observations until the end of the sample to generate a point forecast and a 95% confidence interval based on your estimated model. Briefly discuss your forecast.
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+yoy3 <- window(yoy, start=2008)
+
+autoplot(forecast(Arima(yoy2, order =
+  c(2,0,4)),h=length(yoy3)))+
+  autolayer(yoy, series ="YOY-ARMA(2,4)" )+ 
+  xlab("Time") + ylab("")+ 
+  theme(legend.position="bottom", legend.box = "vertical")
+
+autoplot(forecast(Arima(yoy2, order = c(2,0,2)),h=length(yoy3)))+
+  autolayer(yoy, series ="YOY-ARMA(2,2)" )+ 
+  xlab("Time") + ylab("")+ 
+  theme(legend.position="bottom", legend.box = "vertical")
+```
+
+## j) 
+### Evaluate the bias and RMSE for your preferred model, in the evaluation period (2008Q1 to 2018Q3).
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+accuracy(forecast(Arima(yoy2, order = c(2,0,4)),h=length(yoy3)),yoy3)
+
+```
+
+### Evaluate the bias and RMSE for the ARMA(2,2) model, in the evaluation period (2008Q1 to 2018Q3).
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+accuracy(forecast(Arima(yoy2, order = c(2,0,2)),h=length(yoy3)),yoy3)
+
+```
+
+### Again, what model do you prefer?
+
+### And what do you conclude about the state of the Norwegian business cycle?
+
+```{r, eval = TRUE, echo=FALSE, warning=FALSE, error=FALSE}
+# use HP filter to deviate from trend estimate with HP filter
+hplgdp <- hpfilter(lgdp, type = "lambda", freq = 40000)
+
+autoplot(hplgdp$trend, series = "Trend") + 
+  xlab("Time") + ylab("") + 
+  ggtitle("HP filter") +
+  autolayer(lgdp, series = "Actual")
+
+autoplot(hplgdp$cycle) + xlab("Time") + ylab("") + 
+  ggtitle("Cycle") + 
+  geom_hline(yintercept = 0, colour = "black")
+
+```
